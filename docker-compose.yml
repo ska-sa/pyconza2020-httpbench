@@ -1,0 +1,19 @@
+version: "2.3"
+services:
+  minio:
+    network_mode: host
+    image: minio/minio:RELEASE.2020-06-12T00-06-19Z
+    command: server --address 127.0.0.1:8999 /data
+    volumes:
+      - ./minio-data:/data
+    environment:
+      MINIO_ACCESS_KEY: minioaccesskey
+      MINIO_SECRET_KEY: miniosecretkey
+  varnish:
+    network_mode: host
+    image: varnish:6.4
+    volumes:
+      - ./default.vcl:/etc/varnish/default.vcl:ro
+    tmpfs:
+      - /var/lib/varnish:exec
+    command: "varnishd -F -f /etc/varnish/default.vcl -a http=localhost:8998 -s default,4G"
