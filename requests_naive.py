@@ -63,6 +63,13 @@ def load_requests_naive(url: str) -> np.ndarray:
     return array
 
 
+@method('requests-readarray')
+def load_requests_readarray(url: str) -> np.ndarray:
+    with requests.Session() as session:
+        with session.get(url, stream=True) as resp:
+            return readarray(resp.raw)
+
+
 @method('httpx-naive')
 def load_httpx_naive(url: str) -> np.ndarray:
     with httpx.Client() as client:
