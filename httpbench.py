@@ -136,17 +136,7 @@ def load_socket_readinto(url: str) -> np.ndarray:
     return np.lib.format.read_array(io.BytesIO(raw), allow_pickle=False)
 
 
-def main():
-    parser = argparse.ArgumentParser()
-    parser.add_argument('method')
-    parser.add_argument('url')
-    args = parser.parse_args()
-    if args.method not in METHODS:
-        parser.error('Method must be one of {}'.format(set(METHODS.keys())))
-
-    start = time.monotonic()
-    array = METHODS[args.method](args.url)
-    stop = time.monotonic()
+def validate_array(array: np.ndarray):
     size = array.nbytes
     try:
         checksum = CHECKSUMS[size]
@@ -156,9 +146,28 @@ def main():
         actual_checksum = hashlib.sha256(array).hexdigest()
         if actual_checksum != checksum:
             print(f'Checksum mismatch ({actual_checksum} != {checksum})')
-    elapsed = stop - start
-    rate = size / elapsed
-    print('{:.1f} MB/s'.format(rate / 1e6))
+
+
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--passes', type=int, default=5)
+    parser.add_argument('method')
+    parser.add_argument('url')
+    args = parser.parse_args()
+    if args.method not in METHODS:
+        parser.error('Method must be one of {}'.format(set(METHODS.keys())))
+
+    rates = []
+    for i in range(args.passes):
+        start = time.monotonic()
+        array = METHODS[args.method](args.url)
+        stop = time.monotonic()
+        elapsed = stop - start
+        rates.append(array.nbytes / elapsed)
+    validate_array(array)
+    mean = np.mean(rates)
+    std = np.std(rates) / np.sqrt(args.passes - 1)
+    print('{:.1f} ± {:.1f} MB/s'.format(mean / 1e6, std / 1e6))
 
 
 if __name__ == '__main__':

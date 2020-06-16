@@ -9,6 +9,7 @@ services:
     environment:
       MINIO_ACCESS_KEY: minioaccesskey
       MINIO_SECRET_KEY: miniosecretkey
+    cpuset: 2-3
   varnish:
     network_mode: host
     image: varnish:6.4
@@ -17,3 +18,4 @@ services:
     tmpfs:
       - /var/lib/varnish:exec
     command: "varnishd -F -f /etc/varnish/default.vcl -a http=localhost:8998 -s default,4G"
+    cpuset: 2-3
