@@ -2,6 +2,7 @@
 
 import argparse
 import hashlib
+import http.client
 import io
 import socket
 import textwrap
@@ -14,11 +15,11 @@ import httpx
 import numpy as np
 
 
-_Method = Callable[[str], np.ndarray]
+_Method = Callable[[str], bytes]
 METHODS = {}
 CHECKSUMS = {
-    10**6: 'e35bfb6f16b3a02031be803ed908067962df0d49b4f6ef8ccd6da03df5a22688',
-    10**9: '723e7a1e1bd20bd279b5d2100a128461fa9236826e4ceb67c53be9cb8d9f1ad7'
+    10**6 + 128: 'fa82243e0db587af04504f5d3229ff7227f574f8f938edaad8be8e168bc2bc87',
+    10**9 + 128: 'd699e2c306b897609be6222315366b25137778e18f8634c75b006cef50647978'
 }
 
 
@@ -30,53 +31,42 @@ def method(name: str) -> Callable[[_Method], _Method]:
     return decorate
 
 
-def readarray(fp: io.BufferedIOBase) -> np.ndarray:
-    version = np.lib.format.read_magic(fp)
-    if version == (1, 0):
-        shape, fortran_order, dtype = np.lib.format.read_array_header_1_0(fp)
-    elif version == (2, 0):
-        shape, fortran_order, dtype = np.lib.format.read_array_header_2_0(fp)
-    else:
-        raise ValueError('Unsupported .npy version {}'.format(version))
-    if dtype.hasobject:
-        raise ValueError('Object arrays are not supported')
-    count = int(np.product(shape))
-    data = np.ndarray(count, dtype=dtype)
-    bytes_read = fp.readinto(memoryview(data.view(np.uint8)))
-    if bytes_read != data.nbytes:
-        raise ValueError(f'Unexpected EOF: read {bytes_read}, expected {data.nbytes}')
-    if fortran_order:
-        data.shape = shape[::-1]
-        data = data.transpose()
-    else:
-        data.shape = shape
-    return data
+@method('httpclient-naive')
+def load_httpclient_naive(url: str) -> bytes:
+    parts = urllib.parse.urlparse(url)
+    try:
+        host, port_str = parts.netloc.split(':')
+        port = int(port_str)
+    except ValueError:
+        host = parts.netloc
+        port = 80
+    conn = http.client.HTTPConnection(host, port)
+    conn.request('GET', url)
+    resp = conn.getresponse()
+    return resp.read(resp.length)     # type: ignore
 
 
 @method('requests-naive')
-def load_requests_naive(url: str) -> np.ndarray:
-    with requests.Session() as session:
-        with session.get(url) as resp:
-            data = resp.content
-    fp = io.BytesIO(data)
-    array = np.load(fp, allow_pickle=False)
-    return array
+def load_requests_naive(url: str) -> bytes:
+    with requests.get(url) as resp:
+        return resp.content
 
 
-@method('requests-readarray')
-def load_requests_readarray(url: str) -> np.ndarray:
-    with requests.Session() as session:
-        with session.get(url, stream=True) as resp:
-            return readarray(resp.raw)
+@method('requests-stream-read')
+def load_requests_stream(url: str) -> bytes:
+    with requests.get(url, stream=True) as resp:
+        return resp.raw.read()
+
+
+@method('requests-stream-fp-read')
+def load_requests_stream_fp_read(url: str) -> bytes:
+    with requests.get(url, stream=True) as resp:
+        return resp.raw._fp.read()
 
 
 @method('httpx-naive')
-def load_httpx_naive(url: str) -> np.ndarray:
-    with httpx.Client() as client:
-        r = client.get(url)
-    fp = io.BytesIO(r.content)
-    array = np.load(fp, allow_pickle=False)
-    return array
+def load_httpx_naive(url: str) -> bytes:
+    return httpx.get(url).content
 
 
 def prepare_socket(url: str) -> Tuple[io.BufferedIOBase, int]:
@@ -108,44 +98,45 @@ def prepare_socket(url: str) -> Tuple[io.BufferedIOBase, int]:
                 content_length = int(text.split(' ')[1])
 
 
-@method('socket-readarray')
-def load_socket_readarray(url: str) -> np.ndarray:
-    fh, _ = prepare_socket(url)
-    return readarray(fh)
-
-
-@method('socket-direct')
-def load_socket_direct(url: str) -> np.ndarray:
-    fh, _ = prepare_socket(url)
-    return np.lib.format.read_array(fh, allow_pickle=False)
-
-
 @method('socket-read')
-def load_socket_read(url: str) -> np.ndarray:
+def load_socket_read(url: str) -> bytes:
     fh, content_length = prepare_socket(url)
-    data = fh.read(content_length)
-    return np.lib.format.read_array(io.BytesIO(data), allow_pickle=False)
+    return fh.read(content_length)
 
 
 @method('socket-readinto')
-def load_socket_readinto(url: str) -> np.ndarray:
+def load_socket_readinto(url: str) -> bytes:
     fh, content_length = prepare_socket(url)
     raw = bytearray(content_length)
     n = fh.readinto(raw)
     assert n == content_length
-    return np.lib.format.read_array(io.BytesIO(raw), allow_pickle=False)
+    return memoryview(raw)[:n].tobytes()
 
 
-def validate_array(array: np.ndarray):
-    size = array.nbytes
+def validate(data: bytes):
+    size = len(data)
     try:
         checksum = CHECKSUMS[size]
     except KeyError:
-        pass
+        print('No checksum found')
     else:
-        actual_checksum = hashlib.sha256(array).hexdigest()
+        actual_checksum = hashlib.sha256(data).hexdigest()
         if actual_checksum != checksum:
             print(f'Checksum mismatch ({actual_checksum} != {checksum})')
+
+
+def measure_method(method: str, args: argparse.Namespace) -> None:
+    rates = []
+    for i in range(args.passes):
+        start = time.monotonic()
+        data = METHODS[method](args.url)
+        stop = time.monotonic()
+        elapsed = stop - start
+        rates.append(len(data) / elapsed)
+    validate(data)
+    mean = np.mean(rates)
+    std = np.std(rates) / np.sqrt(args.passes - 1)
+    print('{}: {:.1f} ± {:.1f} MB/s'.format(method, mean / 1e6, std / 1e6))
 
 
 def main():
@@ -154,20 +145,14 @@ def main():
     parser.add_argument('method')
     parser.add_argument('url')
     args = parser.parse_args()
-    if args.method not in METHODS:
-        parser.error('Method must be one of {}'.format(set(METHODS.keys())))
+    if args.method not in METHODS and args.method != 'all':
+        parser.error('Method must be "all" or one of {}'.format(set(METHODS.keys())))
 
-    rates = []
-    for i in range(args.passes):
-        start = time.monotonic()
-        array = METHODS[args.method](args.url)
-        stop = time.monotonic()
-        elapsed = stop - start
-        rates.append(array.nbytes / elapsed)
-    validate_array(array)
-    mean = np.mean(rates)
-    std = np.std(rates) / np.sqrt(args.passes - 1)
-    print('{:.1f} ± {:.1f} MB/s'.format(mean / 1e6, std / 1e6))
+    if args.method == 'all':
+        for method in METHODS:
+            measure_method(method, args)
+    else:
+        measure_method(args.method, args)
 
 
 if __name__ == '__main__':
