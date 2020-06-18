@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 
 import argparse
+import gc
 import hashlib
 import http.client
 import io
@@ -128,12 +129,15 @@ def validate(data: bytes):
 def measure_method(method: str, args: argparse.Namespace) -> None:
     rates = []
     for i in range(args.passes):
+        gc.collect()
         start = time.monotonic()
         data = METHODS[method](args.url)
         stop = time.monotonic()
         elapsed = stop - start
         rates.append(len(data) / elapsed)
-    validate(data)
+        if i == 0:
+            validate(data)
+        del data
     mean = np.mean(rates)
     std = np.std(rates) / np.sqrt(args.passes - 1)
     print('{}: {:.1f} ± {:.1f} MB/s'.format(method, mean / 1e6, std / 1e6))
