@@ -92,7 +92,7 @@ def prepare_socket(url: str) -> Tuple[io.BufferedIOBase, int]:
         if line == b'\r\n':
             if content_length is None:
                 raise RuntimeError('Did not receive Content-Length header')
-            return fh, content_length
+            return fh, content_length        # type: ignore
         else:
             text = line.decode('latin-1').rstrip().lower()
             if text.startswith('content-length: '):
@@ -111,7 +111,7 @@ def load_socket_readinto(url: str) -> bytes:
     raw = bytearray(content_length)
     n = fh.readinto(raw)
     assert n == content_length
-    return memoryview(raw)[:n].tobytes()
+    return memoryview(raw)[:n]
 
 
 def validate(data: bytes):
