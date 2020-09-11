@@ -39,7 +39,7 @@ def method(name: str) -> Callable[[_Method], _Method]:
 def load_httpclient_naive(url: str) -> bytes:
     parts = urllib.parse.urlparse(url)
     conn = http.client.HTTPConnection(parts.netloc)
-    conn.request('GET', url)
+    conn.request('GET', parts.path)
     resp = conn.getresponse()
     return resp.read(resp.length)     # type: ignore
 
