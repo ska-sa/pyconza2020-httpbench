@@ -13,6 +13,8 @@ from typing import Callable, Tuple, Optional
 
 import requests
 import httpx
+import urllib3
+# import tornado.httpclient
 import numpy as np
 
 
@@ -43,8 +45,7 @@ def load_httpclient_naive(url: str) -> bytes:
 
 @method('requests-naive')
 def load_requests_naive(url: str) -> bytes:
-    with requests.get(url) as resp:
-        return resp.content
+    return requests.get(url).content
 
 
 @method('requests-stream-read')
@@ -57,6 +58,18 @@ def load_requests_stream(url: str) -> bytes:
 def load_requests_stream_fp_read(url: str) -> bytes:
     with requests.get(url, stream=True) as resp:
         return resp.raw._fp.read()
+
+
+@method('urllib3-naive')
+def load_urllib3_naive(url: str) -> bytes:
+    return urllib3.PoolManager().request('GET', url).data
+
+
+# @method('tornado-naive')
+# def load_tornado_naive(url: str) -> bytes:
+#     client = tornado.httpclient.HTTPClient()
+#     response = client.fetch(url)
+#     return response.body
 
 
 @method('httpx-naive')
