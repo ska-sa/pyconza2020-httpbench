@@ -35,13 +35,7 @@ def method(name: str) -> Callable[[_Method], _Method]:
 @method('httpclient-naive')
 def load_httpclient_naive(url: str) -> bytes:
     parts = urllib.parse.urlparse(url)
-    try:
-        host, port_str = parts.netloc.split(':')
-        port = int(port_str)
-    except ValueError:
-        host = parts.netloc
-        port = 80
-    conn = http.client.HTTPConnection(host, port)
+    conn = http.client.HTTPConnection(parts.netloc)
     conn.request('GET', url)
     resp = conn.getresponse()
     return resp.read(resp.length)     # type: ignore
