@@ -1,11 +1,15 @@
 #!/usr/bin/env python
 
 import argparse
+import csv
 import gc
 import hashlib
 import http.client
 import io
+import platform
+import re
 import socket
+import sys
 import textwrap
 import time
 import urllib.parse
@@ -136,6 +140,7 @@ def validate(data: bytes):
 
 def measure_method(method: str, args: argparse.Namespace) -> None:
     rates = []
+    size = 0
     for i in range(args.passes):
         gc.collect()
         start = time.monotonic()
@@ -145,26 +150,50 @@ def measure_method(method: str, args: argparse.Namespace) -> None:
         rates.append(len(data) / elapsed)
         if i == 0:
             validate(data)
+            size = len(data)
         del data
     mean = np.mean(rates)
     std = np.std(rates) / np.sqrt(args.passes - 1)
-    print('{}: {:.1f} ± {:.1f} MB/s'.format(method, mean / 1e6, std / 1e6))
+    return mean, std, size
 
 
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--passes', type=int, default=5)
+    parser.add_argument('--csv', action='store_true')
     parser.add_argument('method')
     parser.add_argument('url')
     args = parser.parse_args()
     if args.method not in METHODS and args.method != 'all':
         parser.error('Method must be "all" or one of {}'.format(set(METHODS.keys())))
 
+    if args.csv:
+        writer = csv.DictWriter(sys.stdout, ['python', 'method', 'size', 'mean', 'std'])
+        writer.writeheader()
+        match = re.search(r'PyPy \S+', sys.version)
+        if match:
+            version = match.group(0)
+        else:
+            version = platform.python_version()
+
     if args.method == 'all':
-        for method in METHODS:
-            measure_method(method, args)
+        methods = METHODS
     else:
-        measure_method(args.method, args)
+        methods = [args.method]
+    for method in methods:
+        mean, std, size = measure_method(method, args)
+        if args.csv:
+            writer.writerow(
+                {
+                    'python': version,
+                    'method': method,
+                    'size': size,
+                    'mean': mean,
+                    'std': std
+                }
+            )
+        else:
+            print('{}: {:.1f} ± {:.1f} MB/s'.format(method, mean / 1e6, std / 1e6))
 
 
 if __name__ == '__main__':
