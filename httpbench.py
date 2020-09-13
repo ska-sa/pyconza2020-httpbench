@@ -39,8 +39,8 @@ def method(name: str) -> Callable[[_Method], _Method]:
     return decorate
 
 
-@method('httpclient-naive')
-def load_httpclient_naive(url: str) -> bytes:
+@method('httpclient')
+def load_httpclient(url: str) -> bytes:
     parts = urllib.parse.urlparse(url)
     conn = http.client.HTTPConnection(parts.netloc)
     conn.request('GET', parts.path)
@@ -48,8 +48,8 @@ def load_httpclient_naive(url: str) -> bytes:
     return resp.read(resp.length)     # type: ignore
 
 
-@method('requests-naive')
-def load_requests_naive(url: str) -> bytes:
+@method('requests')
+def load_requests(url: str) -> bytes:
     return requests.get(url).content
 
 
@@ -65,20 +65,20 @@ def load_requests_stream_fp_read(url: str) -> bytes:
         return resp.raw._fp.read()
 
 
-@method('urllib3-naive')
-def load_urllib3_naive(url: str) -> bytes:
+@method('urllib3')
+def load_urllib3(url: str) -> bytes:
     return urllib3.PoolManager().request('GET', url).data
 
 
-# @method('tornado-naive')
-# def load_tornado_naive(url: str) -> bytes:
+# @method('tornado')
+# def load_tornado(url: str) -> bytes:
 #     client = tornado.httpclient.HTTPClient()
 #     response = client.fetch(url)
 #     return response.body
 
 
-@method('httpx-naive')
-def load_httpx_naive(url: str) -> bytes:
+@method('httpx')
+def load_httpx(url: str) -> bytes:
     return httpx.get(url).content
 
 
@@ -168,7 +168,7 @@ def main():
         parser.error('Method must be "all" or one of {}'.format(set(METHODS.keys())))
 
     if args.csv:
-        writer = csv.DictWriter(sys.stdout, ['python', 'method', 'size', 'mean', 'std'])
+        writer = csv.DictWriter(sys.stdout, ['Python', 'Method', 'Size', 'mean', 'std'])
         writer.writeheader()
         match = re.search(r'PyPy \S+', sys.version)
         if match:
@@ -185,9 +185,9 @@ def main():
         if args.csv:
             writer.writerow(
                 {
-                    'python': version,
-                    'method': method,
-                    'size': size,
+                    'Python': version,
+                    'Method': method,
+                    'Size': size,
                     'mean': mean,
                     'std': std
                 }
