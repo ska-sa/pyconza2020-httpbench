@@ -73,7 +73,7 @@ def load_requests_c1M(url: str) -> bytes:
         requests.models.CONTENT_CHUNK_SIZE = old_chunk
 
 
-@method('requests-stream-read')
+@method('requests-stream')
 def load_requests_stream(url: str) -> bytes:
     with requests.get(url, stream=True) as resp:
         return resp.raw.read()

@@ -35,26 +35,25 @@ def fig_blank():
     fig.savefig('images/blank.pdf')
 
 
-def _fig_generic(ax, df, *, slots=4):
-    df.plot.bar(
-        ax=ax,
-        **COMMON
-    )
+def _fig_generic(ax, df, *, slots=4, numbers=True, extra={}):
+    kwargs = {**COMMON, **extra}
+    df.plot.bar(ax=ax, **kwargs)
     ax.set_xlim(-0.5, slots - 0.5)
     ax.grid(axis='y')
     ax.set_axisbelow(True)
-    for p in ax.patches:
-        ax.annotate('{:.0f}'.format(p.get_height()),
-                    (p.get_x() + 0.5 * p.get_width(), p.get_height() + 50),
-                    fontsize='x-small',
-                    horizontalalignment='center',
-                    verticalalignment='bottom')
+    if numbers:
+        for p in ax.patches:
+            ax.annotate('{:.0f}'.format(p.get_height()),
+                        (p.get_x() + 0.5 * p.get_width(), p.get_height() + 50),
+                        fontsize='x-small',
+                        horizontalalignment='center',
+                        verticalalignment='bottom')
 
 
-def fig_generic(df, pythons, methods, filename):
+def fig_generic(df, pythons, methods, filename, **kwargs):
     fig = matplotlib.figure.Figure(figsize=FIGSIZE)
     ax = fig.subplots()
-    _fig_generic(ax, df.loc[pythons].unstack('Python').loc[methods])
+    _fig_generic(ax, df.loc[pythons].unstack('Python').loc[methods], **kwargs)
     fig.savefig(filename)
 
 
@@ -68,6 +67,15 @@ def fig_chunking(df):
     fig.savefig('images/requests-chunking.pdf')
 
 
+def fig_multi(df):
+    fig = matplotlib.figure.Figure(figsize=FIGSIZE)
+    ax = fig.subplots()
+    df = df.loc[['3.6.12', '3.8.2', 'master', 'PyPy 7.3.1']].unstack('Python')
+    df = df.loc[['requests', 'requests-stream', 'urllib3', 'httpclient-na']]
+    _fig_generic(ax, df, numbers=False)
+    fig.savefig('images/multi.pdf')
+
+
 def main():
     df = load()
 
@@ -75,7 +83,10 @@ def main():
     fig_generic(df, ['3.6.12'], ['requests'], 'images/requests-cpy.pdf')
     fig_generic(df, ['3.6.12', 'PyPy 7.3.1'], ['requests'], 'images/requests-pypy.pdf')
     fig_generic(df, ['3.6.12'], ['requests', 'urllib3', 'httpclient', 'socket-read'], 'images/requests-stack.pdf')
+    fig_generic(df, ['3.6.12'], ['httpclient', 'httpclient-na'], 'images/httpclient-3.6.pdf', slots=2)
+    fig_generic(df, ['3.6.12', '3.8.2', 'master'], ['httpclient', 'httpclient-na'], 'images/httpclient-multi.pdf', slots=2)
     fig_chunking(df)
+    fig_multi(df)
 
 
 if __name__ == '__main__':
