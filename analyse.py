@@ -35,14 +35,12 @@ def fig_blank():
     fig.savefig('images/blank.pdf')
 
 
-def fig_generic(df, pythons, methods, filename):
-    fig = matplotlib.figure.Figure(figsize=FIGSIZE)
-    ax = fig.subplots()
-    df.loc[pythons].unstack('Python').loc[methods].plot.bar(
+def _fig_generic(ax, df, *, slots=4):
+    df.plot.bar(
         ax=ax,
         **COMMON
     )
-    ax.set_xlim(-0.5, 3.5)
+    ax.set_xlim(-0.5, slots - 0.5)
     ax.grid(axis='y')
     ax.set_axisbelow(True)
     for p in ax.patches:
@@ -51,7 +49,23 @@ def fig_generic(df, pythons, methods, filename):
                     fontsize='x-small',
                     horizontalalignment='center',
                     verticalalignment='bottom')
+
+
+def fig_generic(df, pythons, methods, filename):
+    fig = matplotlib.figure.Figure(figsize=FIGSIZE)
+    ax = fig.subplots()
+    _fig_generic(ax, df.loc[pythons].unstack('Python').loc[methods])
     fig.savefig(filename)
+
+
+def fig_chunking(df):
+    fig = matplotlib.figure.Figure(figsize=FIGSIZE, constrained_layout=True)
+    ax = fig.subplots()
+    df = df.loc[['3.6.12', 'PyPy 7.3.1']].unstack('Python').loc[['requests', 'requests-c1M']]
+    _fig_generic(ax, df, slots=2)
+    ax.set_xticklabels(['10 kiB', '1 MiB'])
+    ax.set_xlabel('Chunk size')
+    fig.savefig('images/requests-chunking.pdf')
 
 
 def main():
@@ -61,6 +75,7 @@ def main():
     fig_generic(df, ['3.6.12'], ['requests'], 'images/requests-cpy.pdf')
     fig_generic(df, ['3.6.12', 'PyPy 7.3.1'], ['requests'], 'images/requests-pypy.pdf')
     fig_generic(df, ['3.6.12'], ['requests', 'urllib3', 'httpclient', 'socket-read'], 'images/requests-stack.pdf')
+    fig_chunking(df)
 
 
 if __name__ == '__main__':
