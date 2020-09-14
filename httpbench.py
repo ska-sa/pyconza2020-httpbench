@@ -49,8 +49,8 @@ def load_httpclient(url: str) -> bytes:
     return resp.read(resp.length)     # type: ignore
 
 
-@method('httpclient-unbounded')
-def load_httpclient_unbounded(url: str) -> bytes:
+@method('httpclient-na')
+def load_httpclient_na(url: str) -> bytes:
     parts = urllib.parse.urlparse(url)
     conn = http.client.HTTPConnection(parts.netloc)
     conn.request('GET', parts.path)
