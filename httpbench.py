@@ -6,9 +6,11 @@ import gc
 import hashlib
 import http.client
 import io
+import math
 import platform
 import re
 import socket
+import statistics
 import sys
 import textwrap
 import time
@@ -19,7 +21,6 @@ import requests
 import httpx
 import urllib3
 # import tornado.httpclient
-import numpy as np
 
 
 _Method = Callable[[str], bytes]
@@ -171,8 +172,8 @@ def measure_method(method: str, args: argparse.Namespace) -> None:
             validate(data)
             size = len(data)
         del data
-    mean = np.mean(rates)
-    std = np.std(rates) / np.sqrt(args.passes - 1)
+    mean = statistics.mean(rates)
+    std = statistics.stdev(rates) / math.sqrt(args.passes - 1)
     return mean, std, size
 
 
