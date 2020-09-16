@@ -86,6 +86,7 @@ def main():
     fig_generic(df, ['3.6.12'], ['httpclient', 'httpclient-na'], 'images/httpclient-3.6.pdf', slots=2)
     fig_generic(df, ['3.6.12', '3.8.2', 'master'], ['httpclient', 'httpclient-na'], 'images/httpclient-multi.pdf', slots=2)
     fig_generic(df, ['3.6.12'], ['requests', 'requests-stream', 'urllib3'], 'images/requests-stream.pdf')
+    fig_generic(df, ['3.6.12', 'PyPy 7.3.1'], ['httpx', 'tornado', 'aiohttp'], 'images/other.pdf', slots=3)
     fig_chunking(df)
     fig_multi(df)
 
