@@ -1,10 +1,13 @@
 #!/usr/bin/env python
 
 import argparse
+import asyncio
 import csv
+import functools
 import gc
 import hashlib
 import http.client
+import importlib
 import io
 import math
 import platform
@@ -15,15 +18,11 @@ import sys
 import textwrap
 import time
 import urllib.parse
-from typing import Callable, Tuple, Optional
-
-import requests
-import httpx
-import urllib3
-# import tornado.httpclient
+from typing import Callable, Awaitable, Tuple, Iterable, Optional
 
 
 _Method = Callable[[str], bytes]
+_AMethod = Callable[[str], Awaitable[bytes]]
 METHODS = {}
 CHECKSUMS = {
     10**6 + 128: 'fa82243e0db587af04504f5d3229ff7227f574f8f938edaad8be8e168bc2bc87',
@@ -32,12 +31,31 @@ CHECKSUMS = {
 }
 
 
-def method(name: str) -> Callable[[_Method], _Method]:
+def method(name: str, requires: Iterable[str] = ()) -> Callable[[_Method], _Method]:
     def decorate(func: _Method) -> _Method:
+        for mod in requires:
+            try:
+                importlib.import_module(mod)
+            except ImportError:
+                return func
         METHODS[name] = func
         return func
 
     return decorate
+
+
+def run_async(func: _AMethod) -> _Method:
+    @functools.wraps(func)
+    def wrapper(url: str) -> bytes:
+        loop = asyncio.new_event_loop()
+        try:
+            asyncio.set_event_loop(loop)
+            return loop.run_until_complete(func(url))
+        finally:
+            loop.run_until_complete(loop.shutdown_asyncgens())
+            loop.close()
+
+    return wrapper
 
 
 @method('httpclient')
@@ -58,13 +76,15 @@ def load_httpclient_na(url: str) -> bytes:
     return resp.read()
 
 
-@method('requests')
+@method('requests', ['requests'])
 def load_requests(url: str) -> bytes:
+    import requests
     return requests.get(url).content
 
 
-@method('requests-c1M')
+@method('requests-c1M', ['requests'])
 def load_requests_c1M(url: str) -> bytes:
+    import requests
     old_chunk = requests.models.CONTENT_CHUNK_SIZE
     try:
         requests.models.CONTENT_CHUNK_SIZE = 1024 * 1024
@@ -73,32 +93,47 @@ def load_requests_c1M(url: str) -> bytes:
         requests.models.CONTENT_CHUNK_SIZE = old_chunk
 
 
-@method('requests-stream')
+@method('requests-stream', ['requests'])
 def load_requests_stream(url: str) -> bytes:
+    import requests
     with requests.get(url, stream=True) as resp:
         return resp.raw.read()
 
 
-@method('requests-stream-fp-read')
+@method('requests-stream-fp-read', ['requests'])
 def load_requests_stream_fp_read(url: str) -> bytes:
+    import requests
     with requests.get(url, stream=True) as resp:
         return resp.raw._fp.read()
 
 
-@method('urllib3')
+@method('urllib3', ['urllib3'])
 def load_urllib3(url: str) -> bytes:
+    import urllib3
     return urllib3.PoolManager().request('GET', url).data
 
 
-# @method('tornado')
-# def load_tornado(url: str) -> bytes:
-#     client = tornado.httpclient.HTTPClient()
-#     response = client.fetch(url)
-#     return response.body
+@method('tornado', ['tornado'])
+@run_async
+async def load_tornado(url: str) -> bytes:
+    import tornado.simple_httpclient
+    client = tornado.simple_httpclient.SimpleAsyncHTTPClient(max_body_size=10**10)
+    response = await client.fetch(url)
+    return response.body
 
 
-@method('httpx')
+@method('aiohttp', ['aiohttp'])
+@run_async
+async def load_aiohttp(url: str) -> bytes:
+    import aiohttp
+    async with aiohttp.ClientSession() as session:
+        async with session.get(url) as resp:
+            return await resp.read()
+
+
+@method('httpx', ['httpx'])
 def load_httpx(url: str) -> bytes:
+    import httpx
     return httpx.get(url).content
 
 
@@ -159,6 +194,8 @@ def validate(data: bytes):
 
 
 def measure_method(method: str, args: argparse.Namespace) -> None:
+    # Warmup pass
+    METHODS[method](args.url)
     rates = []
     size = 0
     for i in range(args.passes):
