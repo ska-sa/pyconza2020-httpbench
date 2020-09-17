@@ -107,6 +107,26 @@ def load_requests_stream_fp_read(url: str) -> bytes:
         return resp.raw._fp.read()
 
 
+@method('requests-np', ['requests', 'numpy'])
+def load_requests_np(url: str) -> bytes:
+    import requests
+    import numpy as np
+    with requests.get(url, stream=True) as resp:
+        data = np.empty(int(resp.headers['Content-length']), np.uint8)
+        resp.raw.readinto(memoryview(data))
+    return data
+
+
+@method('requests-np-fp', ['requests', 'numpy'])
+def load_requests_np(url: str) -> bytes:
+    import requests
+    import numpy as np
+    with requests.get(url, stream=True) as resp:
+        data = np.empty(int(resp.headers['Content-length']), np.uint8)
+        resp.raw._fp.readinto(memoryview(data))
+    return data
+
+
 @method('urllib3', ['urllib3'])
 def load_urllib3(url: str) -> bytes:
     import urllib3
