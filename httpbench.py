@@ -157,6 +157,15 @@ def load_httpx(url: str) -> bytes:
     return httpx.get(url).content
 
 
+@method('httpx-async', ['httpx'])
+@run_async
+async def load_httpx_async(url: str) -> bytes:
+    import httpx
+    async with httpx.AsyncClient() as client:
+        r = await client.get(url)
+        return r.content
+
+
 def prepare_socket(url: str) -> Tuple[io.BufferedIOBase, int]:
     parts = urllib.parse.urlparse(url)
     address = (parts.hostname, parts.port)
